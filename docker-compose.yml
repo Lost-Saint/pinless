@@ -1,7 +1,21 @@
+# Override image name, tag, or host port in a local .env file when needed.
 services:
   pinless:
-    container_name: pinless
-    image: ghcr.io/bunk-im/pinless:latest
-    pull_policy: always
+    build:
+      context: .
+      target: runtime
+    image: ${PINLESS_IMAGE:-pinless}:${PINLESS_TAG:-local}
     ports:
-      - "3000:3000"
+      - "${PINLESS_PORT:-3000}:3000"
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app
+
+networks:
+  app:
+    driver: bridge

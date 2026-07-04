@@ -63,20 +63,40 @@ The server listens on `http://127.0.0.1:3000`.
 
 ### Run with Docker Compose
 
-The included [`docker-compose.yml`](./docker-compose.yml) pulls a published
-container image and exposes port `3000`.
+The included [`docker-compose.yml`](./docker-compose.yml) builds the local
+[`Dockerfile`](./Dockerfile), runs the container as a non-root user with a
+read-only filesystem, and exposes port `3000`.
 
 ```bash
-docker compose up -d
+docker compose up --build -d
 ```
 
 Then open `http://127.0.0.1:3000`.
+
+You can override the default image name, tag, or host port with a local `.env`
+file based on [`.env.example`](./.env.example):
+
+```bash
+cp .env.example .env
+```
+
+Available variables:
+
+- `PINLESS_IMAGE`: local image name used by Compose
+- `PINLESS_TAG`: local image tag used by Compose
+- `PINLESS_PORT`: host port mapped to container port `3000`
 
 ### Build your own image
 
 ```bash
 docker build -t pinless .
 docker run --rm -p 3000:3000 pinless
+```
+
+To pin a different Go toolchain during image build:
+
+```bash
+docker build --build-arg GO_VERSION=1.26.1 -t pinless .
 ```
 
 ## Usage
