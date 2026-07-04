@@ -23,7 +23,7 @@ It focuses on:
 
 ### Home
 
-![Pinless home page](https://files.bunk.im/raw/KRfSUF.png)
+![Pinless home page](docs/images/Screenshot From 2026-07-04 18-01-30.png)
 
 ### Search results
 
