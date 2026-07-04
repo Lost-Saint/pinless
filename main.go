@@ -66,6 +66,7 @@ func main() {
 	router.GET("/pin/:id", pinHandler)
 	router.GET("/image", proxyImageHandler)
 	router.GET("/about", renderPage("about.html"))
+	router.GET("/licenses", renderPage("licenses.html"))
 
 	fmt.Print(` _____ _     _             
 |  _  |_|___| |___ ___ ___ 
