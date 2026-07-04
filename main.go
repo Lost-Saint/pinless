@@ -1,15 +1,17 @@
 package main
 
 import (
-	"compress/gzip"
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
 	"io/fs"
+	"log"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,11 +24,6 @@ var templatesFS embed.FS
 //go:embed static/*
 var staticFS embed.FS
 
-type SearchResult struct {
-	Images   []string `json:"images"`
-	Bookmark string   `json:"bookmark,omitempty"`
-}
-
 type Pin struct {
 	ID          string `json:"id"`
 	ImageURL    string `json:"image_url"`
@@ -35,176 +32,104 @@ type Pin struct {
 	PinnerName  string `json:"pinner_name"`
 }
 
-type PinData struct {
-	Pin     Pin
-	Related []Pin
+type ResultItem struct {
+	ID    string
+	Image string
 }
 
-var allowedDomains = []string{"pinimg.com", "i.pinimg.com", "pinterest.com"}
+const (
+	listenAddr          = ":3000"
+	pinterestSearchURL  = "https://www.pinterest.com/resource/BaseSearchResource/get/"
+	pinterestPinURL     = "https://www.pinterest.com/resource/PinResource/get/"
+	pinterestRelatedURL = "https://www.pinterest.com/resource/RelatedModulesResource/get/"
+	upstreamUserAgent   = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+)
+
+var (
+	allowedDomains = []string{"pinimg.com", "pinterest.com"}
+	upstreamClient = &http.Client{Timeout: 20 * time.Second}
+)
 
 func main() {
 	gin.SetMode(gin.ReleaseMode)
-	gin.DefaultWriter = io.Discard
-	gin.DefaultErrorWriter = io.Discard
 
-	router := gin.Default()
+	router := gin.New()
+	router.Use(gin.Recovery())
 
-	// Serve embedded static files
-	staticSubFS, _ := fs.Sub(staticFS, "static")
-	router.StaticFS("/static", http.FS(staticSubFS))
+	router.StaticFS("/static", http.FS(mustSubFS(staticFS, "static")))
+	router.SetHTMLTemplate(template.Must(template.ParseFS(templatesFS, "templates/*")))
 
-	// Load embedded templates
-	tmpl := template.Must(template.ParseFS(templatesFS, "templates/*"))
-	router.SetHTMLTemplate(tmpl)
-
-	router.GET("/", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "index.html", nil)
-	})
-
+	router.GET("/", renderPage("index.html"))
 	router.GET("/search/pins/", searchHandler)
 	router.GET("/pin/:id", pinHandler)
 	router.GET("/image", proxyImageHandler)
-	router.GET("/about", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "about.html", nil)
-	})
+	router.GET("/about", renderPage("about.html"))
 
-	fmt.Println(` _____ _     _             
+	fmt.Print(` _____ _     _             
 |  _  |_|___| |___ ___ ___ 
 |   __| |   | | -_|_ -|_ -|
 |__|  |_|_|_|_|___|___|___|
 `)
-	fmt.Println("Server running at http://0.0.0.0:3000")
+	log.Printf("server running at http://0.0.0.0%s", listenAddr)
 
-	router.Run(":3000")
+	if err := router.Run(listenAddr); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func searchHandler(c *gin.Context) {
-	query := c.Query("q")
+	query := strings.TrimSpace(c.Query("q"))
 
-	// get bookmark from cookie for privacy
-	bookmark := ""
-	if cookie, err := c.Cookie("bookmark"); err == nil && cookie != "" {
-		bookmark = cookie
-	}
+	bookmark := cookieValue(c, "bookmark")
 
-	// clear bookmark if new search
 	if _, nextExists := c.GetQuery("next"); !nextExists {
-		c.SetCookie("bookmark", "", -1, "/", "", false, true)
+		clearCookie(c, "bookmark")
 		bookmark = ""
 	}
 
-	csrftoken := ""
-	if cookie, err := c.Cookie("csrftoken"); err == nil && cookie != "" {
-		csrftoken = cookie
-	}
+	csrftoken := cookieValue(c, "csrftoken")
 
-	apiURL := "https://www.pinterest.com/resource/BaseSearchResource/get/"
-	options := map[string]interface{}{
+	options := map[string]any{
 		"query": query,
 	}
 	if bookmark != "" {
 		options["bookmarks"] = []string{bookmark}
 	}
-	dataParamObj := map[string]interface{}{"options": options}
-
-	dataParam, err := json.Marshal(dataParamObj)
+	dataParam, err := marshalPinterestOptions(options)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encode data"})
 		return
 	}
 
-	dataParamEscaped := url.QueryEscape(string(dataParam))
-	finalURL := fmt.Sprintf("%s?data=%s", apiURL, dataParamEscaped)
-
 	method := http.MethodGet
-	var body io.Reader
+	queryValues := url.Values{"data": {dataParam}}
+	var formValues url.Values
 	if bookmark != "" {
 		method = http.MethodPost
-		finalURL = apiURL
-		body = strings.NewReader("data=" + dataParamEscaped)
+		queryValues = nil
+		formValues = url.Values{"data": {dataParam}}
 	}
 
-	req, err := http.NewRequest(method, finalURL, body)
+	resp, bodyBytes, err := doPinterestRequest(
+		c.Request.Context(),
+		method,
+		pinterestSearchURL,
+		queryValues,
+		formValues,
+		"www/search/[scope].js",
+		"",
+		csrftoken,
+	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create request"})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Request failed"})
 		return
 	}
-	if method == http.MethodPost {
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	}
 
-	req.Header.Set("x-pinterest-pws-handler", "www/search/[scope].js")
-	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
-	req.Header.Set("User-Agent", "Mozilla/5.0")
-	req.Header.Set("Accept-Encoding", "gzip")
-	req.Header.Set("X-Requested-With", "XMLHttpRequest")
-
-	if csrftoken != "" {
-		req.Header.Set("x-csrftoken", csrftoken)
-		req.Header.Set("cookie", fmt.Sprintf("csrftoken=%s", csrftoken))
-	}
-
-	client := &http.Client{Timeout: 20 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Request failed"})
-		return
-	}
-	defer resp.Body.Close()
-
-	if newToken := resp.Cookies(); len(newToken) > 0 {
-		for _, ck := range newToken {
-			if ck != nil && ck.Name == "csrftoken" && ck.Value != "" {
-				csrftoken = ck.Value
-				c.SetCookie("csrftoken", csrftoken, 0, "/", "", false, true)
-				break
-			}
-		}
-	}
-
-	var reader io.Reader = resp.Body
-	contentEncoding := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding")))
-	if strings.Contains(contentEncoding, "gzip") {
-		gzr, gzErr := gzip.NewReader(resp.Body)
-		if gzErr != nil {
-			c.HTML(http.StatusBadGateway, "results.html", gin.H{
-				"Results": nil,
-				"Query":   query,
-				"Error": gin.H{
-					"error":            "Failed to init gzip reader",
-					"upstream_status":  resp.Status,
-					"content_encoding": resp.Header.Get("Content-Encoding"),
-					"content_type":     resp.Header.Get("Content-Type"),
-					"details":          gzErr.Error(),
-				},
-			})
-			return
-		}
-		defer gzr.Close()
-		reader = gzr
-	}
-
-	bodyBytes, err := io.ReadAll(reader)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read response"})
-		return
+	if csrfToken := responseCookieValue(resp, "csrftoken"); csrfToken != "" {
+		c.SetCookie("csrftoken", csrfToken, 0, "/", "", false, true)
 	}
 	if resp.StatusCode != http.StatusOK {
-		snippet := string(bodyBytes)
-		if len(snippet) > 500 {
-			snippet = snippet[:500]
-		}
-		c.HTML(http.StatusBadGateway, "results.html", gin.H{
-			"Results": nil,
-			"Query":   query,
-			"Error": gin.H{
-				"error":            "Upstream error",
-				"upstream_status":  resp.Status,
-				"content_encoding": resp.Header.Get("Content-Encoding"),
-				"content_type":     resp.Header.Get("Content-Type"),
-				"body":             snippet,
-			},
-		})
+		renderSearchError(c, query, resp, "Upstream error", bodyBytes, nil)
 		return
 	}
 
@@ -225,46 +150,23 @@ func searchHandler(c *gin.Context) {
 	}
 
 	if err := json.Unmarshal(bodyBytes, &responseData); err != nil {
-		snippet := string(bodyBytes)
-		if len(snippet) > 500 {
-			snippet = snippet[:500]
-		}
-		c.HTML(http.StatusBadGateway, "results.html", gin.H{
-			"Results": nil,
-			"Query":   query,
-			"Error": gin.H{
-				"error":            "Failed to decode response",
-				"upstream_status":  resp.Status,
-				"content_encoding": resp.Header.Get("Content-Encoding"),
-				"content_type":     resp.Header.Get("Content-Type"),
-				"decode_error":     err.Error(),
-				"body":             snippet,
-			},
-		})
+		renderSearchError(c, query, resp, "Failed to decode response", bodyBytes, err)
 		return
 	}
 
-	// store bookmark for pagination
 	if responseData.ResourceResponse.Bookmark != "" {
 		c.SetCookie("bookmark", responseData.ResourceResponse.Bookmark, 0, "/", "", false, true)
 	} else {
-		// clear cookie when no pages
-		c.SetCookie("bookmark", "", -1, "/", "", false, true)
-	}
-
-	type ResultItem struct {
-		ID    string
-		Image string
+		clearCookie(c, "bookmark")
 	}
 
 	var results []ResultItem
 	for _, result := range responseData.ResourceResponse.Data.Results {
-		imageUrl := result.Images.Orig.URL
-		if imageUrl != "" && isAllowedDomain(imageUrl) {
-			proxyImageUrl := fmt.Sprintf("/image?url=%s", url.QueryEscape(imageUrl))
+		imageURL := result.Images.Orig.URL
+		if imageURL != "" && isAllowedDomain(imageURL) {
 			results = append(results, ResultItem{
 				ID:    result.ID,
-				Image: proxyImageUrl,
+				Image: proxiedImageURL(imageURL),
 			})
 		}
 	}
@@ -281,29 +183,23 @@ func pinHandler(c *gin.Context) {
 	query := c.Query("q")
 	from := c.Query("from")
 
-	bookmark := ""
-	if cookie, err := c.Cookie("bookmark"); err == nil && cookie != "" {
-		bookmark = cookie
-	}
+	bookmark := cookieValue(c, "bookmark")
 
 	if _, nextExists := c.GetQuery("next"); !nextExists {
-		c.SetCookie("bookmark", "", -1, "/", "", false, true)
+		clearCookie(c, "bookmark")
 		bookmark = ""
 	}
 
-	csrftoken := ""
-	if cookie, err := c.Cookie("csrftoken"); err == nil && cookie != "" {
-		csrftoken = cookie
-	}
+	csrftoken := cookieValue(c, "csrftoken")
 
-	pin := fetchPinDetails(pinID, csrftoken)
+	pin := fetchPinDetails(c.Request.Context(), pinID, csrftoken)
 
-	related, nextBookmark := fetchRelatedPins(pinID, csrftoken, bookmark)
+	related, nextBookmark := fetchRelatedPins(c.Request.Context(), pinID, csrftoken, bookmark)
 
 	if nextBookmark != "" {
 		c.SetCookie("bookmark", nextBookmark, 0, "/", "", false, true)
 	} else {
-		c.SetCookie("bookmark", "", -1, "/", "", false, true)
+		clearCookie(c, "bookmark")
 	}
 
 	c.HTML(http.StatusOK, "pin.html", gin.H{
@@ -315,51 +211,35 @@ func pinHandler(c *gin.Context) {
 	})
 }
 
-func fetchPinDetails(pinID string, csrftoken string) Pin {
-	apiURL := "https://www.pinterest.com/resource/PinResource/get/"
+func fetchPinDetails(ctx context.Context, pinID string, csrftoken string) Pin {
 	sourceURL := fmt.Sprintf("/pin/%s/", pinID)
-	options := map[string]interface{}{
+	options := map[string]any{
 		"id": pinID,
 	}
-	dataParamObj := map[string]interface{}{"options": options}
-	dataParam, _ := json.Marshal(dataParamObj)
-	dataParamEscaped := url.QueryEscape(string(dataParam))
-	sourceURLEscaped := url.QueryEscape(sourceURL)
-	finalURL := fmt.Sprintf("%s?source_url=%s&data=%s", apiURL, sourceURLEscaped, dataParamEscaped)
-
-	req, _ := http.NewRequest(http.MethodGet, finalURL, nil)
-	req.Header.Set("Accept", "application/json, text/javascript, */*, q=0.01")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-	req.Header.Set("Accept-Encoding", "gzip")
-	req.Header.Set("X-Requested-With", "XMLHttpRequest")
-	req.Header.Set("x-pinterest-pws-handler", fmt.Sprintf("www/pin/%s.js", pinID))
-	req.Header.Set("x-pinterest-source-url", sourceURL)
-	req.Header.Set("Referer", "https://www.pinterest.com/")
-
-	if csrftoken != "" {
-		req.Header.Set("x-csrftoken", csrftoken)
-		req.Header.Set("cookie", fmt.Sprintf("csrftoken=%s", csrftoken))
-	}
-
-	client := &http.Client{Timeout: 20 * time.Second}
-	resp, err := client.Do(req)
+	dataParam, err := marshalPinterestOptions(options)
 	if err != nil {
 		return Pin{ID: pinID}
 	}
-	defer resp.Body.Close()
 
-	var reader io.Reader = resp.Body
-	contentEncoding := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding")))
-	if strings.Contains(contentEncoding, "gzip") {
-		gzr, err := gzip.NewReader(resp.Body)
-		if err != nil {
-			return Pin{ID: pinID}
-		}
-		defer gzr.Close()
-		reader = gzr
+	resp, bodyBytes, err := doPinterestRequest(
+		ctx,
+		http.MethodGet,
+		pinterestPinURL,
+		url.Values{
+			"source_url": {sourceURL},
+			"data":       {dataParam},
+		},
+		nil,
+		fmt.Sprintf("www/pin/%s.js", pinID),
+		sourceURL,
+		csrftoken,
+	)
+	if err != nil {
+		return Pin{ID: pinID}
 	}
-
-	bodyBytes, _ := io.ReadAll(reader)
+	if resp.StatusCode != http.StatusOK {
+		return Pin{ID: pinID}
+	}
 
 	var singlePinResponse struct {
 		ResourceResponse struct {
@@ -405,25 +285,20 @@ func fetchPinDetails(pinID string, csrftoken string) Pin {
 		PinnerName:  strings.TrimSpace(data.Pinner.FullName),
 	}
 
-	if data.Images.Orig.URL != "" {
-		pin.ImageURL = fmt.Sprintf("/image?url=%s", url.QueryEscape(data.Images.Orig.URL))
-	} else if data.Images.Size736x.URL != "" {
-		pin.ImageURL = fmt.Sprintf("/image?url=%s", url.QueryEscape(data.Images.Size736x.URL))
-	} else if data.Images.Size564x.URL != "" {
-		pin.ImageURL = fmt.Sprintf("/image?url=%s", url.QueryEscape(data.Images.Size564x.URL))
-	} else if data.Images.Size474x.URL != "" {
-		pin.ImageURL = fmt.Sprintf("/image?url=%s", url.QueryEscape(data.Images.Size474x.URL))
-	} else if data.Images.Size236x.URL != "" {
-		pin.ImageURL = fmt.Sprintf("/image?url=%s", url.QueryEscape(data.Images.Size236x.URL))
-	}
+	pin.ImageURL = proxiedImageURL(firstNonEmpty(
+		data.Images.Orig.URL,
+		data.Images.Size736x.URL,
+		data.Images.Size564x.URL,
+		data.Images.Size474x.URL,
+		data.Images.Size236x.URL,
+	))
 
 	return pin
 }
 
-func fetchRelatedPins(pinID string, csrftoken string, bookmark string) ([]Pin, string) {
-	apiURL := "https://www.pinterest.com/resource/RelatedModulesResource/get/"
+func fetchRelatedPins(ctx context.Context, pinID string, csrftoken string, bookmark string) ([]Pin, string) {
 	sourceURL := fmt.Sprintf("/pin/%s/", pinID)
-	options := map[string]interface{}{
+	options := map[string]any{
 		"pin_id":    pinID,
 		"page_size": 12,
 		"source":    "pin",
@@ -431,57 +306,39 @@ func fetchRelatedPins(pinID string, csrftoken string, bookmark string) ([]Pin, s
 	if bookmark != "" {
 		options["bookmarks"] = []string{bookmark}
 	}
-	dataParamObj := map[string]interface{}{"options": options}
-	dataParam, _ := json.Marshal(dataParamObj)
-	dataParamEscaped := url.QueryEscape(string(dataParam))
-	sourceURLEscaped := url.QueryEscape(sourceURL)
-
-	finalURL := fmt.Sprintf("%s?source_url=%s&data=%s", apiURL, sourceURLEscaped, dataParamEscaped)
-
-	method := http.MethodGet
-	var body io.Reader
-	if bookmark != "" {
-		method = http.MethodPost
-		finalURL = apiURL
-		body = strings.NewReader("data=" + dataParamEscaped)
-	}
-
-	req, _ := http.NewRequest(method, finalURL, body)
-	if method == http.MethodPost {
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	}
-	req.Header.Set("Accept", "application/json, text/javascript, */*, q=0.01")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-	req.Header.Set("Accept-Encoding", "gzip")
-	req.Header.Set("X-Requested-With", "XMLHttpRequest")
-	req.Header.Set("x-pinterest-pws-handler", fmt.Sprintf("www/pin/%s.js", pinID))
-	req.Header.Set("x-pinterest-source-url", sourceURL)
-	req.Header.Set("Referer", "https://www.pinterest.com/")
-
-	if csrftoken != "" {
-		req.Header.Set("x-csrftoken", csrftoken)
-		req.Header.Set("cookie", fmt.Sprintf("csrftoken=%s", csrftoken))
-	}
-
-	client := &http.Client{Timeout: 20 * time.Second}
-	resp, err := client.Do(req)
+	dataParam, err := marshalPinterestOptions(options)
 	if err != nil {
 		return []Pin{}, ""
 	}
-	defer resp.Body.Close()
 
-	var reader io.Reader = resp.Body
-	contentEncoding := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding")))
-	if strings.Contains(contentEncoding, "gzip") {
-		gzr, err := gzip.NewReader(resp.Body)
-		if err != nil {
-			return []Pin{}, ""
-		}
-		defer gzr.Close()
-		reader = gzr
+	method := http.MethodGet
+	queryValues := url.Values{
+		"source_url": {sourceURL},
+		"data":       {dataParam},
+	}
+	var formValues url.Values
+	if bookmark != "" {
+		method = http.MethodPost
+		queryValues = nil
+		formValues = url.Values{"data": {dataParam}}
 	}
 
-	bodyBytes, _ := io.ReadAll(reader)
+	resp, bodyBytes, err := doPinterestRequest(
+		ctx,
+		method,
+		pinterestRelatedURL,
+		queryValues,
+		formValues,
+		fmt.Sprintf("www/pin/%s.js", pinID),
+		sourceURL,
+		csrftoken,
+	)
+	if err != nil {
+		return []Pin{}, ""
+	}
+	if resp.StatusCode != http.StatusOK {
+		return []Pin{}, ""
+	}
 
 	var responseData struct {
 		ResourceResponse struct {
@@ -527,12 +384,10 @@ func fetchRelatedPins(pinID string, csrftoken string, bookmark string) ([]Pin, s
 	}
 
 	var related []Pin
-	pinCount := 0
 	for _, result := range responseData.ResourceResponse.Data {
 		if result.Type != "pin" || result.ID == "" {
 			continue
 		}
-		pinCount++
 
 		title := ""
 		if len(result.TitleRaw) > 0 {
@@ -556,18 +411,13 @@ func fetchRelatedPins(pinID string, csrftoken string, bookmark string) ([]Pin, s
 			title = result.Description
 		}
 
-		var imageURL string
-		if result.Images.Orig.URL != "" {
-			imageURL = fmt.Sprintf("/image?url=%s", url.QueryEscape(result.Images.Orig.URL))
-		} else if result.Images.Size736x.URL != "" {
-			imageURL = fmt.Sprintf("/image?url=%s", url.QueryEscape(result.Images.Size736x.URL))
-		} else if result.Images.Size564x.URL != "" {
-			imageURL = fmt.Sprintf("/image?url=%s", url.QueryEscape(result.Images.Size564x.URL))
-		} else if result.Images.Size474x.URL != "" {
-			imageURL = fmt.Sprintf("/image?url=%s", url.QueryEscape(result.Images.Size474x.URL))
-		} else if result.Images.Size236x.URL != "" {
-			imageURL = fmt.Sprintf("/image?url=%s", url.QueryEscape(result.Images.Size236x.URL))
-		}
+		imageURL := proxiedImageURL(firstNonEmpty(
+			result.Images.Orig.URL,
+			result.Images.Size736x.URL,
+			result.Images.Size564x.URL,
+			result.Images.Size474x.URL,
+			result.Images.Size236x.URL,
+		))
 
 		if imageURL != "" {
 			related = append(related, Pin{
@@ -583,42 +433,208 @@ func fetchRelatedPins(pinID string, csrftoken string, bookmark string) ([]Pin, s
 }
 
 func proxyImageHandler(c *gin.Context) {
-	imageUrl := c.Query("url")
-	if !isAllowedDomain(imageUrl) {
+	imageURL := c.Query("url")
+	if !isAllowedDomain(imageURL) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Domain not allowed"})
 		return
 	}
 
-	imageSrc, err := fetchImage(imageUrl)
+	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, imageURL, nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch image"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid image URL"})
+		return
+	}
+	req.Header.Set("User-Agent", upstreamUserAgent)
+
+	resp, err := upstreamClient.Do(req)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to fetch image"})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Image upstream returned non-200"})
 		return
 	}
 
-	c.Header("Content-Type", "image/png")
-	c.Data(http.StatusOK, "image/png", imageSrc)
-}
-
-func isAllowedDomain(urlStr string) bool {
-	parsedUrl, err := url.Parse(urlStr)
-	if err != nil || parsedUrl.Host == "" {
-		return false
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
 	}
 
-	for _, domain := range allowedDomains {
-		if parsedUrl.Host == domain || strings.HasSuffix(parsedUrl.Host, "."+domain) {
-			return true
+	headers := map[string]string{}
+	for _, header := range []string{"Cache-Control", "ETag", "Last-Modified"} {
+		if value := resp.Header.Get(header); value != "" {
+			headers[header] = value
 		}
 	}
 
-	return false
+	c.DataFromReader(http.StatusOK, resp.ContentLength, contentType, resp.Body, headers)
 }
 
-func fetchImage(imageUrl string) ([]byte, error) {
-	resp, err := http.Get(imageUrl)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch image")
+func isAllowedDomain(urlStr string) bool {
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		return false
+	}
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return false
+	}
+
+	host := strings.ToLower(parsedURL.Hostname())
+	if host == "" {
+		return false
+	}
+
+	return slices.ContainsFunc(allowedDomains, func(domain string) bool {
+		if host == domain || strings.HasSuffix(host, "."+domain) {
+			return true
+		}
+		return false
+	})
+}
+
+func doPinterestRequest(
+	ctx context.Context,
+	method string,
+	endpoint string,
+	queryValues url.Values,
+	formValues url.Values,
+	handler string,
+	sourceURL string,
+	csrftoken string,
+) (*http.Response, []byte, error) {
+	var body io.Reader
+	if method == http.MethodPost && len(formValues) > 0 {
+		body = strings.NewReader(formValues.Encode())
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(queryValues) > 0 {
+		req.URL.RawQuery = queryValues.Encode()
+	}
+	setPinterestHeaders(req, handler, sourceURL, csrftoken)
+	if method == http.MethodPost && len(formValues) > 0 {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+
+	resp, err := upstreamClient.Do(req)
+	if err != nil {
+		return nil, nil, err
 	}
 	defer resp.Body.Close()
-	return io.ReadAll(resp.Body)
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return resp, bodyBytes, nil
+}
+
+func setPinterestHeaders(req *http.Request, handler string, sourceURL string, csrftoken string) {
+	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
+	req.Header.Set("User-Agent", upstreamUserAgent)
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("x-pinterest-pws-handler", handler)
+	if sourceURL != "" {
+		req.Header.Set("x-pinterest-source-url", sourceURL)
+		req.Header.Set("Referer", "https://www.pinterest.com/")
+	}
+	if csrftoken != "" {
+		req.Header.Set("x-csrftoken", csrftoken)
+		req.Header.Set("Cookie", (&http.Cookie{Name: "csrftoken", Value: csrftoken}).String())
+	}
+}
+
+func marshalPinterestOptions(options map[string]any) (string, error) {
+	body, err := json.Marshal(map[string]any{"options": options})
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+func responseCookieValue(resp *http.Response, name string) string {
+	for _, cookie := range resp.Cookies() {
+		if cookie != nil && cookie.Name == name && cookie.Value != "" {
+			return cookie.Value
+		}
+	}
+	return ""
+}
+
+func clearCookie(c *gin.Context, name string) {
+	c.SetCookie(name, "", -1, "/", "", false, true)
+}
+
+func cookieValue(c *gin.Context, name string) string {
+	cookie, err := c.Cookie(name)
+	if err != nil {
+		return ""
+	}
+	return cookie
+}
+
+func renderPage(name string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.HTML(http.StatusOK, name, nil)
+	}
+}
+
+func mustSubFS(fsys fs.FS, dir string) fs.FS {
+	subFS, err := fs.Sub(fsys, dir)
+	if err != nil {
+		log.Fatalf("load embedded filesystem %q: %v", dir, err)
+	}
+	return subFS
+}
+
+func renderSearchError(c *gin.Context, query string, resp *http.Response, message string, body []byte, decodeErr error) {
+	errorData := gin.H{
+		"error": message,
+	}
+	if resp != nil {
+		errorData["upstream_status"] = resp.Status
+		errorData["content_type"] = resp.Header.Get("Content-Type")
+	}
+	if decodeErr != nil {
+		errorData["decode_error"] = decodeErr.Error()
+	}
+	if len(body) > 0 {
+		errorData["body"] = truncatedBody(body, 500)
+	}
+
+	c.HTML(http.StatusBadGateway, "results.html", gin.H{
+		"Results": nil,
+		"Query":   query,
+		"Error":   errorData,
+	})
+}
+
+func truncatedBody(body []byte, limit int) string {
+	if len(body) <= limit {
+		return string(body)
+	}
+	return string(body[:limit])
+}
+
+func proxiedImageURL(imageURL string) string {
+	if imageURL == "" {
+		return ""
+	}
+	return fmt.Sprintf("/image?url=%s", url.QueryEscape(imageURL))
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
