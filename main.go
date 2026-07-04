@@ -43,6 +43,8 @@ const (
 	pinterestPinURL     = "https://www.pinterest.com/resource/PinResource/get/"
 	pinterestRelatedURL = "https://www.pinterest.com/resource/RelatedModulesResource/get/"
 	upstreamUserAgent   = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+	searchBookmarkKey   = "search_bookmark"
+	relatedBookmarkKey  = "related_bookmark"
 )
 
 var (
@@ -80,10 +82,10 @@ func main() {
 func searchHandler(c *gin.Context) {
 	query := strings.TrimSpace(c.Query("q"))
 
-	bookmark := cookieValue(c, "bookmark")
+	bookmark := cookieValue(c, searchBookmarkKey)
 
 	if _, nextExists := c.GetQuery("next"); !nextExists {
-		clearCookie(c, "bookmark")
+		clearCookie(c, searchBookmarkKey)
 		bookmark = ""
 	}
 
@@ -155,9 +157,9 @@ func searchHandler(c *gin.Context) {
 	}
 
 	if responseData.ResourceResponse.Bookmark != "" {
-		c.SetCookie("bookmark", responseData.ResourceResponse.Bookmark, 0, "/", "", false, true)
+		c.SetCookie(searchBookmarkKey, responseData.ResourceResponse.Bookmark, 0, "/", "", false, true)
 	} else {
-		clearCookie(c, "bookmark")
+		clearCookie(c, searchBookmarkKey)
 	}
 
 	var results []ResultItem
@@ -183,10 +185,10 @@ func pinHandler(c *gin.Context) {
 	query := c.Query("q")
 	from := c.Query("from")
 
-	bookmark := cookieValue(c, "bookmark")
+	bookmark := cookieValue(c, relatedBookmarkKey)
 
 	if _, nextExists := c.GetQuery("next"); !nextExists {
-		clearCookie(c, "bookmark")
+		clearCookie(c, relatedBookmarkKey)
 		bookmark = ""
 	}
 
@@ -197,9 +199,9 @@ func pinHandler(c *gin.Context) {
 	related, nextBookmark := fetchRelatedPins(c.Request.Context(), pinID, csrftoken, bookmark)
 
 	if nextBookmark != "" {
-		c.SetCookie("bookmark", nextBookmark, 0, "/", "", false, true)
+		c.SetCookie(relatedBookmarkKey, nextBookmark, 0, "/", "", false, true)
 	} else {
-		clearCookie(c, "bookmark")
+		clearCookie(c, relatedBookmarkKey)
 	}
 
 	c.HTML(http.StatusOK, "pin.html", gin.H{

@@ -9,6 +9,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%221em%22 font-size=%2280%22>📌</text></svg>">
     <link rel="stylesheet" href="/static/reset.css">
     <link rel="stylesheet" href="/static/app.css">
+    <script src="/static/app.js" defer></script>
 </head>
 
 <body>
@@ -52,12 +53,12 @@
             <main id="main-content" class="content-stack">
                 <div class="pin-detail-layout">
                     {{ if .From }}
-                    <a class="back-link" href="/pin/{{ .From }}?q={{ .Query | urlquery }}">
+                    <a class="back-link" href="/pin/{{ .From }}?q={{ .Query | urlquery }}" data-history-back>
                         <span aria-hidden="true">←</span>
                         <span>Back to previous pin</span>
                     </a>
                     {{ else }}
-                    <a class="back-link" href="/search/pins/?q={{ .Query | urlquery }}">
+                    <a class="back-link" href="/search/pins/?q={{ .Query | urlquery }}" data-history-back>
                         <span aria-hidden="true">←</span>
                         <span>Back to results</span>
                     </a>
@@ -105,7 +106,11 @@
                                 <img
                                     class="pin-card__image"
                                     src="{{ .ImageURL }}"
-                                    alt="{{ if .Title }}{{ .Title }}{{ else if .Description }}{{ .Description }}{{ else if .PinnerName }}Pin by {{ .PinnerName }}{{ else }}Related pin image{{ end }}">
+                                    alt="{{ if .Title }}{{ .Title }}{{ else if .Description }}{{ .Description }}{{ else if .PinnerName }}Pin by {{ .PinnerName }}{{ else }}Related pin image{{ end }}"
+                                    loading="lazy"
+                                    decoding="async"
+                                    data-image-fallback>
+                                <span class="pin-card__fallback">Open related pin</span>
                             </a>
                         </li>
                         {{ end }}

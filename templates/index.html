@@ -14,14 +14,10 @@
 <body>
     <a class="skip-link" href="#main-content">Skip to main content</a>
     <div id="app">
-        <main id="main-content" class="hero">
-            <section class="hero__panel" aria-labelledby="home-title">
-                <p class="eyebrow">Privacy-first Pinterest viewer</p>
-                <h1 id="home-title" class="hero__title">Pinless</h1>
-                <p class="hero__lede">
-                    Search public Pinterest content without handing Pinterest your IP address directly.
-                </p>
-                <div class="hero__actions">
+        <main id="main-content" class="hero hero--simple">
+            <section class="hero__simple-stack" aria-labelledby="home-title">
+                <h1 id="home-title" class="hero__brand">Pinless</h1>
+                <div class="hero__search">
                     <form action="/search/pins/" method="GET" class="search-form" role="search">
                         <label class="visually-hidden" for="search">Search for public Pinterest content</label>
                         <div class="search-field">
@@ -30,7 +26,7 @@
                                 class="search-input"
                                 type="search"
                                 name="q"
-                                placeholder="Search for cats, recipes, design ideas, and more"
+                                placeholder="Search Pinterest"
                                 autocomplete="off"
                                 autocapitalize="none"
                                 spellcheck="false"
@@ -47,7 +43,7 @@
                         </div>
                     </form>
                 </div>
-                <nav class="meta-links" aria-label="Project links">
+                <nav class="meta-links hero__links" aria-label="Project links">
                     <a href="https://github.com/bunk-im/pinless" target="_blank" rel="noopener noreferrer">Source</a>
                     <a href="https://github.com/bunk-im/pinless/blob/main/INSTANCES.md" target="_blank" rel="noopener noreferrer">Instances</a>
                     <a href="/about">About</a>
