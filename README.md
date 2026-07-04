@@ -23,15 +23,15 @@ It focuses on:
 
 ### Home
 
-![Pinless home page](docs/images/Screenshot From 2026-07-04 18-01-30.png)
+![Pinless home page](docs/images/Home.png)
 
 ### Search results
 
-![Pinless search results](https://files.bunk.im/raw/MGU7YJ.jpg)
+![Pinless search results](docs/images/Results.png)
 
 ### Pin details
 
-![Pinless pin details](https://files.bunk.im/raw/zAXXLz.png)
+![Pinless pin details](docs/images/Details.png)
 
 ## Features
 
