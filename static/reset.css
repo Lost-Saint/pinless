@@ -1,0 +1,136 @@
+/* 1. Box model */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+/* 2. Remove default margin (preserve dialog backdrop spacing) */
+*:not(dialog) {
+    margin: 0;
+}
+
+html {
+    scrollbar-gutter: stable;
+    interpolate-size: allow-keywords;
+}
+
+/* 3. Body */
+body {
+    min-block-size: 100svh;
+    line-height: 1.5;
+}
+
+/* 4. Media elements -- block display, constrain width */
+picture,
+video,
+canvas,
+svg {
+    display: block;
+    max-width: 100%;
+}
+
+/* 5. Images -- preserve aspect ratio, handle broken src gracefully */
+img {
+    height: auto;
+    vertical-align: middle;
+    font-style: italic;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+/* 6. Inherit fonts for form controls */
+input,
+button,
+textarea,
+select {
+    font: inherit;
+}
+
+/* 7. Avoid text overflow on headings and paragraphs */
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    overflow-wrap: break-word;
+}
+
+/* 8. Improve line wrapping */
+p {
+    text-wrap: pretty;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    text-wrap: balance;
+}
+
+/* 9. Lists -- only strip style when used as decorative/nav lists */
+ul[role="list"],
+ol[role="list"] {
+    list-style: none;
+}
+
+/* 10. Links -- inherit color, improve underline rendering */
+a {
+    color: inherit;
+    text-decoration-skip-ink: auto;
+}
+
+/* 11. Scroll margin so :target headings aren't hidden behind sticky nav */
+:target {
+    scroll-margin-block: 32px;
+}
+
+@supports (scroll-margin-block: 1rlh) {
+    :target {
+        scroll-margin-block: 5rlh;
+    }
+}
+
+/* 12. Visually hidden -- hidden from view but readable by assistive tech */
+.visually-hidden:not(:focus):not(:active) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* 13. Focus ring -- accessible, not ugly */
+:focus-visible {
+    outline: 2px solid var(--color-focus, currentColor);
+    outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* 14. Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* 15. Root stacking context -- prevents z-index conflicts with modals/toasts */
+#app {
+    isolation: isolate;
+}

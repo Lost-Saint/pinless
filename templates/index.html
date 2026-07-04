@@ -4,130 +4,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Pinless is a privacy-focused frontend for browsing public Pinterest content with less tracking.">
     <title>Pinless</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%221em%22 font-size=%2280%22>📌</text></svg>">
-    <style>
-        body {
-            background: #121212;
-            color: #fff;
-            font-family: sans-serif;
-            margin: 0;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow-x: hidden;
-        }
-
-        .container {
-            max-width: 600px;
-            width: 100%;
-            padding: 0 16px;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-
-        header {
-            text-align: center;
-            font-size: x-large;
-            margin-top: -32.16px;
-            margin-bottom: -1rem;
-        }
-
-        input#search {
-            all: unset;
-            background: #222;
-            color: #fff;
-            padding: 0.7rem 1rem;
-            border-radius: 24px;
-            width: 100%;
-        }
-
-        input#search:-webkit-autofill,
-        input#search:-webkit-autofill:hover,
-        input#search:-webkit-autofill:focus,
-        input#search:-webkit-autofill:active {
-            -webkit-box-shadow: 0 0 0 30px #222 inset !important;
-            -webkit-text-fill-color: #fff !important;
-        }
-
-        .search {
-            width: 100%;
-            max-width: 500px;
-            position: relative;
-            margin: 0.5rem auto 1.2rem;
-            display: flex;
-            padding: 0 16px;
-            box-sizing: border-box;
-        }
-
-        button[type="submit"] {
-            all: unset;
-            position: absolute;
-            right: 24px;
-            top: 50%;
-            transform: translateY(-50%);
-            height: 30px;
-            width: 30px;
-            color: #e60023;
-            background-color: #222;
-            cursor: pointer;
-            z-index: 10;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .links {
-            font-size: 0.9rem;
-            display: flex;
-            justify-content: center;
-            gap: 0.5rem;
-        }
-
-        a {
-            color: #e60023;
-            text-decoration: none;
-        }
-
-        a:hover {
-            text-decoration: underline;
-        }
-
-        .dot {
-            color: #888;
-            user-select: none;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/reset.css">
+    <link rel="stylesheet" href="/static/app.css">
 </head>
 
 <body>
-    <div class="container">
-        <header>
-            <h1>Pinless</h1>
-        </header>
-
-        <form action="/search/pins/" method="GET">
-            <div class="search">
-                <input id="search" type="text" name="q" placeholder="Search for the cute cats, memes, etc."
-                    required />
-                <button type="submit"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round" class="lucide lucide-search">
-                        <circle cx="11" cy="11" r="8" />
-                        <path d="m21 21-4.3-4.3" />
-                    </svg></button>
-            </div>
-        </form>
-        <div class="links">
-            <a href="https://github.com/bunk-im/pinless" target="_blank">Source</a><span class="dot">•</span>
-            <a href="https://github.com/bunk-im/pinless/blob/main/INSTANCES.md" target="_blank">Instances</a><span class="dot">•</span>
-            <a href="/about">About</a>
-        </div>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <div id="app">
+        <main id="main-content" class="hero">
+            <section class="hero__panel" aria-labelledby="home-title">
+                <p class="eyebrow">Privacy-first Pinterest viewer</p>
+                <h1 id="home-title" class="hero__title">Pinless</h1>
+                <p class="hero__lede">
+                    Search public Pinterest content without handing Pinterest your IP address directly.
+                </p>
+                <div class="hero__actions">
+                    <form action="/search/pins/" method="GET" class="search-form" role="search">
+                        <label class="visually-hidden" for="search">Search for public Pinterest content</label>
+                        <div class="search-field">
+                            <input
+                                id="search"
+                                class="search-input"
+                                type="search"
+                                name="q"
+                                placeholder="Search for cats, recipes, design ideas, and more"
+                                autocomplete="off"
+                                autocapitalize="none"
+                                spellcheck="false"
+                                enterkeyhint="search"
+                                required>
+                            <button class="search-button" type="submit" aria-label="Search">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" aria-hidden="true">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <path d="m21 21-4.3-4.3"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <nav class="meta-links" aria-label="Project links">
+                    <a href="https://github.com/bunk-im/pinless" target="_blank" rel="noopener noreferrer">Source</a>
+                    <a href="https://github.com/bunk-im/pinless/blob/main/INSTANCES.md" target="_blank" rel="noopener noreferrer">Instances</a>
+                    <a href="/about">About</a>
+                </nav>
+            </section>
+        </main>
     </div>
 </body>
-    
+
 </html>

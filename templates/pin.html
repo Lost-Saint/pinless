@@ -4,237 +4,125 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Pin details and related images in Pinless, a privacy-focused Pinterest frontend.">
     <title>{{ if ne .Pin.Title "" }}{{ .Pin.Title }} - Pinless{{ else if ne .Pin.Description "" }}{{ if gt (len .Pin.Description) 50 }}{{ slice .Pin.Description 0 50 }}... - Pinless{{ else }}{{ .Pin.Description }} - Pinless{{ end }}{{ else if ne .Pin.PinnerName "" }}Pin by {{ .Pin.PinnerName }} - Pinless{{ else }}Pinless{{ end }}</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%221em%22 font-size=%2280%22>📌</text></svg>">
-    <style>
-        body {
-            background: #121212;
-            color: #fff;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            font-family: sans-serif;
-            scrollbar-color: gray #121212;
-            margin: 0;
-            padding: 20px;
-        }
-
-        .search-container {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            max-width: 100vw;
-            gap: 1rem;
-            width: 90%;
-            margin: 0 auto;
-            margin-bottom: 20px;
-        }
-
-        input#search {
-            all: unset;
-            background: #222;
-            color: #fff;
-            padding: 0.7rem 1rem;
-            border-radius: 24px;
-            width: 100%;
-        }
-
-        input#search:-webkit-autofill,
-        input#search:-webkit-autofill:hover,
-        input#search:-webkit-autofill:focus,
-        input#search:-webkit-autofill:active {
-            -webkit-box-shadow: 0 0 0 30px #222 inset !important;
-            -webkit-text-fill-color: #fff !important;
-        }
-
-        .search {
-            max-width: 500px;
-            width: 100%;
-            position: relative;
-            display: flex;
-        }
-
-        button[type="submit"] {
-            all: unset;
-            position: absolute;
-            right: 8px;
-            top: 50%;
-            transform: translateY(-50%);
-            height: 30px;
-            width: 30px;
-            color: #e60023;
-            background-color: #222;
-            cursor: pointer;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        a {
-            text-decoration: none;
-            color: inherit;
-        }
-
-        .logo-full {
-            display: inline;
-        }
-        .logo-short {
-            display: none;
-        }
-        @media (max-width: 600px) {
-            .logo-full {
-                display: none;
-            }
-            .logo-short {
-                display: inline;
-            }
-        }
-
-        .pin-container {
-            max-width: 800px;
-            width: 100%;
-            background: #1e1e1e;
-            border-radius: 16px;
-            overflow: hidden;
-            margin-bottom: 40px;
-        }
-
-        .pin-container img {
-            width: 100%;
-            max-height: 70vh;
-            object-fit: contain;
-            display: block;
-            border-radius: 16px 16px 0 0;
-        }
-
-        .pin-info {
-            padding: 20px;
-        }
-
-        .pin-title {
-            font-size: 1.5rem;
-            font-weight: bold;
-            margin-bottom: 10px;
-            color: #fff;
-        }
-
-        .pin-description {
-            font-size: 1rem;
-            color: #ccc;
-            margin-bottom: 10px;
-            line-height: 1.5;
-        }
-
-        .pin-pinner {
-            font-size: 0.9rem;
-            color: #888;
-        }
-
-        .related-section {
-            width: 100%;
-            max-width: 1200px;
-        }
-
-        .related-title {
-            font-size: 1.3rem;
-            margin-bottom: 20px;
-            padding-left: 10px;
-        }
-
-        .grid-container {
-            columns: 5 200px;
-            column-gap: 1.5rem;
-            width: 100%;
-            margin: 0 auto;
-        }
-
-        .grid-container div {
-            margin: 0 1.5rem 1.5rem 0;
-            display: inline-block;
-            width: 100%;
-            padding: 5px;
-            border-radius: 16px;
-            overflow: hidden;
-        }
-
-        .grid-container div img {
-            width: 100%;
-            border-radius: 16px;
-            display: block;
-            cursor: pointer;
-        }
-
-        .no-related {
-            text-align: center;
-            color: #888;
-            padding: 40px;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/reset.css">
+    <link rel="stylesheet" href="/static/app.css">
 </head>
 
 <body>
-    <div class="search-container">
-        <h1><a href="/"><span class="logo-short">P</span><span class="logo-full">Pinless</span></a></h1>
-        <form action="/search/pins/" method="GET" class="search">
-            <input id="search" type="text" name="q" placeholder="Search for the cute cats, memes, etc."
-                required />
-            <button type="submit"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                    class="lucide lucide-search">
-                    <circle cx="11" cy="11" r="8" />
-                    <path d="m21 21-4.3-4.3" />
-                </svg></button>
-        </form>
-    </div>
-
-    <div style="display: flex; align-items: center; gap: 10px; max-width: 850px; width: 100%;">
-        {{if .From}}
-        <a href="/pin/{{.From}}?q={{ .Query | urlquery }}" style="color: #888; text-decoration: none; font-size: 2rem; padding: 10px;">←</a>
-        {{else}}
-        <a href="/search/pins/?q={{ .Query | urlquery }}" style="color: #888; text-decoration: none; font-size: 2rem; padding: 10px;">←</a>
-        {{end}}
-        <div class="pin-container">
-        {{if .Pin.ImageURL}}
-        <img src="{{ .Pin.ImageURL }}" alt="{{ if .Pin.Title }}{{ .Pin.Title }}{{ else if .Pin.Description }}{{ .Pin.Description }}{{ else if .Pin.PinnerName }}Pin by {{ .Pin.PinnerName }}{{ else }}Pin image{{ end }}" />
-        {{end}}
-        <div class="pin-info">
-            {{if .Pin.Title}}
-            <div class="pin-title">{{ .Pin.Title }}</div>
-            {{end}}
-            {{if .Pin.Description}}
-            <div class="pin-description">{{ .Pin.Description }}</div>
-            {{end}}
-            {{if .Pin.PinnerName}}
-            <div class="pin-pinner">Pinned by {{ .Pin.PinnerName }}</div>
-            {{end}}
-        </div>
-    </div>
-    </div>
-
-    <div class="related-section">
-        <div class="related-title">Related Pins</div>
-        {{if .Related}}
-        <div class="grid-container">
-            {{range .Related}}
-            <div>
-                <a href="/pin/{{.ID}}?q={{ $.Query | urlquery }}&from={{ $.Pin.ID }}">
-                    <img src="{{.ImageURL}}" alt="{{ if .Title }}{{ .Title }}{{ else if .Description }}{{ .Description }}{{ else if .PinnerName }}Pin by {{ .PinnerName }}{{ else }}Pin image{{ end }}" title="{{ if .Title }}{{ .Title }}{{ else if .Description }}{{ .Description }}{{ else if .PinnerName }}Pin by {{ .PinnerName }}{{ else }}Pin image{{ end }}" />
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <div id="app">
+        <div class="page-shell">
+            <header class="site-header">
+                <a class="brand" href="/" aria-label="Go to the Pinless home page">
+                    <span class="brand__mark" aria-hidden="true">P</span>
+                    <span class="brand__text">Pinless</span>
                 </a>
-            </div>
-            {{end}}
+                <div class="site-search">
+                    <form action="/search/pins/" method="GET" class="search-form" role="search">
+                        <label class="visually-hidden" for="search">Search for public Pinterest content</label>
+                        <div class="search-field">
+                            <input
+                                id="search"
+                                class="search-input"
+                                type="search"
+                                name="q"
+                                value="{{ .Query }}"
+                                placeholder="Search for more ideas"
+                                autocomplete="off"
+                                autocapitalize="none"
+                                spellcheck="false"
+                                enterkeyhint="search"
+                                required>
+                            <button class="search-button" type="submit" aria-label="Search">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" aria-hidden="true">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <path d="m21 21-4.3-4.3"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </header>
+
+            <main id="main-content" class="content-stack">
+                <div class="pin-detail-layout">
+                    {{ if .From }}
+                    <a class="back-link" href="/pin/{{ .From }}?q={{ .Query | urlquery }}">
+                        <span aria-hidden="true">←</span>
+                        <span>Back to previous pin</span>
+                    </a>
+                    {{ else }}
+                    <a class="back-link" href="/search/pins/?q={{ .Query | urlquery }}">
+                        <span aria-hidden="true">←</span>
+                        <span>Back to results</span>
+                    </a>
+                    {{ end }}
+
+                    <article class="panel pin-detail-card">
+                        {{ if .Pin.ImageURL }}
+                        <img
+                            class="pin-detail-card__image"
+                            src="{{ .Pin.ImageURL }}"
+                            alt="{{ if .Pin.Title }}{{ .Pin.Title }}{{ else if .Pin.Description }}{{ .Pin.Description }}{{ else if .Pin.PinnerName }}Pin by {{ .Pin.PinnerName }}{{ else }}Pin image{{ end }}">
+                        {{ end }}
+                        <div class="pin-detail-card__body">
+                            {{ if .Pin.Title }}
+                            <h1 class="pin-detail-title">{{ .Pin.Title }}</h1>
+                            {{ else }}
+                            <h1 class="pin-detail-title">Pin details</h1>
+                            {{ end }}
+                            {{ if .Pin.Description }}
+                            <p class="pin-detail-description">{{ .Pin.Description }}</p>
+                            {{ end }}
+                            {{ if .Pin.PinnerName }}
+                            <p class="pin-detail-byline">Pinned by {{ .Pin.PinnerName }}</p>
+                            {{ end }}
+                        </div>
+                    </article>
+                </div>
+
+                <section class="content-stack" aria-labelledby="related-title">
+                    <div class="pin-meta-row">
+                        <div>
+                            <h2 id="related-title" class="section-heading">Related pins</h2>
+                            <p class="section-subtitle">More public pins connected to this item.</p>
+                        </div>
+                    </div>
+
+                    {{ if .Related }}
+                    <ul class="pin-grid" role="list" aria-label="Related pins">
+                        {{ range .Related }}
+                        <li class="pin-grid__item">
+                            <a
+                                class="pin-card"
+                                href="/pin/{{ .ID }}?q={{ $.Query | urlquery }}&from={{ $.Pin.ID }}"
+                                aria-label="{{ if .Title }}Open related pin: {{ .Title }}{{ else if .Description }}Open related pin: {{ .Description }}{{ else if .PinnerName }}Open related pin by {{ .PinnerName }}{{ else }}Open related pin{{ end }}">
+                                <img
+                                    class="pin-card__image"
+                                    src="{{ .ImageURL }}"
+                                    alt="{{ if .Title }}{{ .Title }}{{ else if .Description }}{{ .Description }}{{ else if .PinnerName }}Pin by {{ .PinnerName }}{{ else }}Related pin image{{ end }}">
+                            </a>
+                        </li>
+                        {{ end }}
+                    </ul>
+                    {{ if .RelatedBookmark }}
+                    <nav class="pagination" aria-label="Pagination">
+                        <a class="pagination__link" href="/pin/{{ .Pin.ID }}?q={{ .Query | urlquery }}&from={{ .From | urlquery }}&next">Next page</a>
+                    </nav>
+                    {{ end }}
+                    {{ else }}
+                    <section class="empty-state" aria-live="polite">
+                        <p>No related pins found.</p>
+                    </section>
+                    {{ end }}
+                </section>
+            </main>
         </div>
-        {{if .RelatedBookmark}}
-        <div class="pagination-container">
-            <h2 style="text-align: center;">
-                <a href="/pin/{{ .Pin.ID }}?q={{ .Query | urlquery }}&from={{ .From | urlquery }}&next">Next page</a>
-            </h2>
-        </div>
-        {{end}}
-        {{else}}
-        <div class="no-related">No related pins found</div>
-        {{end}}
     </div>
 </body>
 

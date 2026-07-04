@@ -4,73 +4,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Licenses</title>
+    <meta name="description" content="Third-party licenses for Pinless.">
+    <title>Licenses - Pinless</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%221em%22 font-size=%2280%22>📌</text></svg>">
-    <style>
-        body {
-            background: #121212;
-            color: #fff;
-            max-width: 600px;
-            margin: auto;
-            padding: 0 16px;
-            margin-bottom: 500px;
-            scrollbar-color: gray #121212;
-            font-family: sans-serif;
-            border-radius: 16px;
-            overflow: hidden;
-        }
-
-        a {
-            color: #e60023;
-            text-decoration: none;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/reset.css">
+    <link rel="stylesheet" href="/static/app.css">
 </head>
 
 <body>
-    <h1>gin-gonic</h1>
-    <p>
-        The MIT License (MIT)
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <div id="app">
+        <div class="page-shell page-shell--narrow">
+            <header class="site-header">
+                <a class="brand" href="/" aria-label="Go to the Pinless home page">
+                    <span class="brand__mark" aria-hidden="true">P</span>
+                    <span class="brand__text">Pinless</span>
+                </a>
+            </header>
 
-        Copyright (c) 2014 Manuel Martínez-Almeida
+            <main id="main-content" class="prose" aria-labelledby="licenses-title">
+                <section class="panel panel--padded prose-section">
+                    <h1 id="licenses-title">Licenses</h1>
+                    <p>Third-party notices for software and assets used by Pinless.</p>
+                </section>
 
-        Permission is hereby granted, free of charge, to any person obtaining a copy
-        of this software and associated documentation files (the "Software"), to deal
-        in the Software without restriction, including without limitation the rights
-        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-        copies of the Software, and to permit persons to whom the Software is
-        furnished to do so, subject to the following conditions:
+                <section class="license-block" aria-labelledby="gin-license-title">
+                    <h2 id="gin-license-title">gin-gonic</h2>
+                    <pre class="license-text">The MIT License (MIT)
 
-        The above copyright notice and this permission notice shall be included in
-        all copies or substantial portions of the Software.
+Copyright (c) 2014 Manuel Martinez-Almeida
 
-        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-        THE SOFTWARE.
-    </p>
-    <h1>Lucide License</h1>
-    <p>
-        ISC License
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-        Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT). All other
-        copyright (c) for Lucide are held by Lucide Contributors 2022.
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
 
-        Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby
-        granted, provided that the above copyright notice and this permission notice appear in all copies.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.</pre>
+                </section>
 
-        THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING
-        ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL,
-        DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
-        PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION
-        WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-    </p>
-    <h1>Honorable mentions</h1>
-    <p>This project is inspired by <a href="https://github.com/Ahwxorg/binternet/">Binternet</a></p>
-    <a href="/">&#8592; Go back</a>
+                <section class="license-block" aria-labelledby="lucide-license-title">
+                    <h2 id="lucide-license-title">Lucide</h2>
+                    <pre class="license-text">ISC License
+
+Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT).
+All other copyright (c) for Lucide are held by Lucide Contributors 2022.
+
+Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby
+granted, provided that the above copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING
+ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL,
+DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
+PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION
+WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.</pre>
+                </section>
+
+                <section class="panel panel--padded prose-section" aria-labelledby="credits-title">
+                    <h2 id="credits-title">Honorable mentions</h2>
+                    <p>This project is inspired by <a href="https://github.com/Ahwxorg/binternet/" target="_blank" rel="noopener noreferrer">Binternet</a>.</p>
+                </section>
+
+                <nav class="footer-links" aria-label="Secondary">
+                    <a href="/">Back to search</a>
+                </nav>
+            </main>
+        </div>
+    </div>
 </body>
 
 </html>

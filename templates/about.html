@@ -4,90 +4,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="About Pinless, a privacy-focused frontend for browsing public Pinterest content.">
     <title>About - Pinless</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%221em%22 font-size=%2280%22>📌</text></svg>">
-    <style>
-        body {
-            background: #121212;
-            color: #fff;
-            max-width: 600px;
-            margin: auto;
-            padding: 0 16px 40px;
-            scrollbar-color: gray #121212;
-            font-family: sans-serif;
-            border-radius: 16px;
-            overflow-x: hidden;
-        }
-
-        a {
-            color: #e60023;
-            text-decoration: none;
-        }
-
-        h1 {
-            font-size: 1.5rem;
-            margin-top: 30px;
-            margin-bottom: 15px;
-        }
-
-        h2 {
-            font-size: 1.2rem;
-            margin-top: 25px;
-            margin-bottom: 10px;
-            color: #e60023;
-        }
-
-        p {
-            line-height: 1.6;
-            margin-bottom: 15px;
-        }
-
-        .faq-item {
-            margin-bottom: 25px;
-        }
-
-        .back-link {
-            display: block;
-            margin-top: 40px;
-            margin-bottom: 20px;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/reset.css">
+    <link rel="stylesheet" href="/static/app.css">
 </head>
 
 <body>
-    <h1>About Pinless</h1>
-    <p>
-        Pinless is a privacy-focused frontend for Pinterest. It allows you to browse public content on Pinterest
-        without exposing your IP address or being tracked by Pinterest.
-    </p>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <div id="app">
+        <div class="page-shell page-shell--narrow">
+            <header class="site-header">
+                <a class="brand" href="/" aria-label="Go to the Pinless home page">
+                    <span class="brand__mark" aria-hidden="true">P</span>
+                    <span class="brand__text">Pinless</span>
+                </a>
+            </header>
 
-    <h1>FAQ</h1>
+            <main id="main-content" class="prose">
+                <section class="panel panel--padded prose-section" aria-labelledby="about-title">
+                    <h1 id="about-title">About Pinless</h1>
+                    <p>
+                        Pinless is a privacy-focused frontend for Pinterest. It lets you browse public Pinterest
+                        content without connecting to Pinterest directly from your browser.
+                    </p>
+                </section>
 
-    <div class="faq-item">
-        <h2>I want to report abuse</h2>
-        <p>
-            Pinless doesn't host any content - it just proxies what's already publicly available on
-            Pinterest. If something needs to be taken down, please report it directly to Pinterest.
-        </p>
+                <section class="prose-section" aria-labelledby="faq-title">
+                    <h2 id="faq-title">Frequently asked questions</h2>
+                    <div class="faq-list">
+                        <article class="panel faq-card">
+                            <h3>I want to report abuse</h3>
+                            <p>
+                                Pinless does not host the underlying content. It only proxies content that is already
+                                public on Pinterest. If something needs to be removed, report it to Pinterest directly.
+                            </p>
+                        </article>
+                        <article class="panel faq-card">
+                            <h3>Why use cookies?</h3>
+                            <p>
+                                Pagination tokens in URLs can leak into browser history, referrers, and server logs.
+                                Session cookies are the more private option here.
+                            </p>
+                        </article>
+                    </div>
+                </section>
+
+                <section class="panel panel--padded prose-section" aria-labelledby="legal-title">
+                    <h2 id="legal-title">Legal</h2>
+                    <p>
+                        Pinterest and all related trademarks belong to Pinterest, Inc. Pinless is not affiliated with
+                        or endorsed by Pinterest.
+                    </p>
+                    <p>
+                        Pinless is provided as-is, without warranties or guarantees.
+                    </p>
+                </section>
+
+                <nav class="footer-links" aria-label="Secondary">
+                    <a href="/">Back to search</a>
+                </nav>
+            </main>
+        </div>
     </div>
-    <div class="faq-item">
-        <h2>Why cookies?</h2>
-        <p>
-            URLs with tokens end up in your history and server logs. Session cookies are more private in this case.
-        </p>
-    </div>
-
-    <h1>Legal</h1>
-    <p>
-        Pinterest and all related trademarks belong to Pinterest, Inc. Pinless is not affiliated
-        with or endorsed by them in any way. The name "Pinterest" is only used here to describe
-        what service this tool connects to, nothing more.
-    </p>
-    <p>
-        Pinless is provided as-is with no guarantees.
-    </p>
-
-    <a href="/" class="back-link">&#8592; Go back</a>
 </body>
 
 </html>
