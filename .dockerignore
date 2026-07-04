@@ -1,13 +1,12 @@
-.git
-.github
-.gitignore
-.env
-pinless
-README.md
-INSTANCES.md
-LICENSE
-instances.json
-coverage.*
-*.coverprofile
-*.out
-*.test
+# Exclude everything by default. The Docker build only needs the files below.
+*
+
+!Dockerfile
+!.dockerignore
+!go.mod
+!go.sum
+!main.go
+!static/
+!static/**
+!templates/
+!templates/**
