@@ -67,6 +67,7 @@ func main() {
 	router.GET("/image", proxyImageHandler)
 	router.GET("/about", renderPage("about.html"))
 	router.GET("/licenses", renderPage("licenses.html"))
+	router.NoRoute(renderPageWithStatus("404.html", http.StatusNotFound))
 
 	fmt.Print(` _____ _     _             
 |  _  |_|___| |___ ___ ___ 
@@ -584,8 +585,12 @@ func cookieValue(c *gin.Context, name string) string {
 }
 
 func renderPage(name string) gin.HandlerFunc {
+	return renderPageWithStatus(name, http.StatusOK)
+}
+
+func renderPageWithStatus(name string, status int) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.HTML(http.StatusOK, name, nil)
+		c.HTML(status, name, nil)
 	}
 }
 
