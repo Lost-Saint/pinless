@@ -25,11 +25,12 @@ var templatesFS embed.FS
 var staticFS embed.FS
 
 type Pin struct {
-	ID          string `json:"id"`
-	ImageURL    string `json:"image_url"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	PinnerName  string `json:"pinner_name"`
+	ID          string   `json:"id"`
+	ImageURL    string   `json:"image_url"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	PinnerName  string   `json:"pinner_name"`
+	Keywords    []string `json:"-"`
 }
 
 type ResultItem struct {
@@ -45,6 +46,8 @@ const (
 	upstreamUserAgent   = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 	searchBookmarkKey   = "search_bookmark"
 	relatedBookmarkKey  = "related_bookmark"
+	upstreamAttempts    = 3
+	upstreamRetryDelay  = 150 * time.Millisecond
 )
 
 var (
@@ -61,7 +64,7 @@ func main() {
 	router.StaticFS("/static", http.FS(mustSubFS(staticFS, "static")))
 	router.SetHTMLTemplate(template.Must(template.ParseFS(templatesFS, "templates/*")))
 
-	router.GET("/", renderPage("index.html"))
+	router.GET("/", indexHandler)
 	router.GET("/search/pins/", searchHandler)
 	router.GET("/pin/:id", pinHandler)
 	router.GET("/image", proxyImageHandler)
@@ -81,8 +84,13 @@ func main() {
 	}
 }
 
+func indexHandler(c *gin.Context) {
+	c.HTML(http.StatusOK, "index.html", gin.H{"HideAI": hideAIPreference(c)})
+}
+
 func searchHandler(c *gin.Context) {
 	query := strings.TrimSpace(c.Query("q"))
+	hideAI := hideAIPreference(c)
 
 	bookmark := cookieValue(c, searchBookmarkKey)
 
@@ -93,37 +101,7 @@ func searchHandler(c *gin.Context) {
 
 	csrftoken := cookieValue(c, "csrftoken")
 
-	options := map[string]any{
-		"query": query,
-	}
-	if bookmark != "" {
-		options["bookmarks"] = []string{bookmark}
-	}
-	dataParam, err := marshalPinterestOptions(options)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encode data"})
-		return
-	}
-
-	method := http.MethodGet
-	queryValues := url.Values{"data": {dataParam}}
-	var formValues url.Values
-	if bookmark != "" {
-		method = http.MethodPost
-		queryValues = nil
-		formValues = url.Values{"data": {dataParam}}
-	}
-
-	resp, bodyBytes, err := doPinterestRequest(
-		c.Request.Context(),
-		method,
-		pinterestSearchURL,
-		queryValues,
-		formValues,
-		"www/search/[scope].js",
-		"",
-		csrftoken,
-	)
+	resp, bodyBytes, err := searchPinterest(c.Request.Context(), query, csrftoken, bookmark)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "Request failed"})
 		return
@@ -133,28 +111,21 @@ func searchHandler(c *gin.Context) {
 		c.SetCookie("csrftoken", csrfToken, 0, "/", "", false, true)
 	}
 	if resp.StatusCode != http.StatusOK {
-		renderSearchError(c, query, resp, "Upstream error", bodyBytes, nil)
+		renderSearchError(c, query, hideAI, resp, "Upstream error", bodyBytes, nil)
 		return
 	}
 
 	var responseData struct {
 		ResourceResponse struct {
 			Data struct {
-				Results []struct {
-					ID     string `json:"id"`
-					Images struct {
-						Orig struct {
-							URL string `json:"url"`
-						} `json:"orig"`
-					} `json:"images"`
-				} `json:"results"`
+				Results []pinPayload `json:"results"`
 			} `json:"data"`
 			Bookmark string `json:"bookmark,omitempty"`
 		} `json:"resource_response"`
 	}
 
 	if err := json.Unmarshal(bodyBytes, &responseData); err != nil {
-		renderSearchError(c, query, resp, "Failed to decode response", bodyBytes, err)
+		renderSearchError(c, query, hideAI, resp, "Failed to decode response", bodyBytes, err)
 		return
 	}
 
@@ -165,9 +136,15 @@ func searchHandler(c *gin.Context) {
 	}
 
 	var results []ResultItem
+	hiddenAI := 0
 	for _, result := range responseData.ResourceResponse.Data.Results {
 		imageURL := result.Images.Orig.URL
 		if imageURL != "" && isAllowedDomain(imageURL) {
+			if hideAI && result.looksAIGenerated() {
+				hiddenAI++
+				continue
+			}
+			seenPins.put(result.toPin())
 			results = append(results, ResultItem{
 				ID:    result.ID,
 				Image: proxiedImageURL(imageURL),
@@ -179,147 +156,26 @@ func searchHandler(c *gin.Context) {
 		"Results":  results,
 		"Bookmark": responseData.ResourceResponse.Bookmark,
 		"Query":    query,
+		"HideAI":   hideAI,
+		"HiddenAI": hiddenAI,
 	})
 }
 
-func pinHandler(c *gin.Context) {
-	pinID := c.Param("id")
-	query := c.Query("q")
-	from := c.Query("from")
-
-	bookmark := cookieValue(c, relatedBookmarkKey)
-
-	if _, nextExists := c.GetQuery("next"); !nextExists {
-		clearCookie(c, relatedBookmarkKey)
-		bookmark = ""
-	}
-
-	csrftoken := cookieValue(c, "csrftoken")
-
-	pin := fetchPinDetails(c.Request.Context(), pinID, csrftoken)
-
-	related, nextBookmark := fetchRelatedPins(c.Request.Context(), pinID, csrftoken, bookmark)
-
-	if nextBookmark != "" {
-		c.SetCookie(relatedBookmarkKey, nextBookmark, 0, "/", "", false, true)
-	} else {
-		clearCookie(c, relatedBookmarkKey)
-	}
-
-	c.HTML(http.StatusOK, "pin.html", gin.H{
-		"Pin":             pin,
-		"Related":         related,
-		"RelatedBookmark": nextBookmark,
-		"Query":           query,
-		"From":            from,
-	})
-}
-
-func fetchPinDetails(ctx context.Context, pinID string, csrftoken string) Pin {
-	sourceURL := fmt.Sprintf("/pin/%s/", pinID)
+// searchPinterest runs a pin search, continuing from bookmark when it is set.
+func searchPinterest(ctx context.Context, query string, csrftoken string, bookmark string) (*http.Response, []byte, error) {
 	options := map[string]any{
-		"id": pinID,
-	}
-	dataParam, err := marshalPinterestOptions(options)
-	if err != nil {
-		return Pin{ID: pinID}
-	}
-
-	resp, bodyBytes, err := doPinterestRequest(
-		ctx,
-		http.MethodGet,
-		pinterestPinURL,
-		url.Values{
-			"source_url": {sourceURL},
-			"data":       {dataParam},
-		},
-		nil,
-		fmt.Sprintf("www/pin/%s.js", pinID),
-		sourceURL,
-		csrftoken,
-	)
-	if err != nil {
-		return Pin{ID: pinID}
-	}
-	if resp.StatusCode != http.StatusOK {
-		return Pin{ID: pinID}
-	}
-
-	var singlePinResponse struct {
-		ResourceResponse struct {
-			Data struct {
-				Title       string `json:"title"`
-				Description string `json:"description"`
-				Images      struct {
-					Orig struct {
-						URL string `json:"url"`
-					} `json:"orig"`
-					Size736x struct {
-						URL string `json:"url"`
-					} `json:"736x"`
-					Size474x struct {
-						URL string `json:"url"`
-					} `json:"474x"`
-					Size564x struct {
-						URL string `json:"url"`
-					} `json:"564x"`
-					Size236x struct {
-						URL string `json:"url"`
-					} `json:"236x"`
-				} `json:"images"`
-				Pinner struct {
-					FullName string `json:"full_name"`
-				} `json:"pinner"`
-				ID   string `json:"id"`
-				Type string `json:"type"`
-			} `json:"data"`
-		} `json:"resource_response"`
-	}
-
-	if err := json.Unmarshal(bodyBytes, &singlePinResponse); err != nil {
-		return Pin{ID: pinID}
-	}
-
-	data := singlePinResponse.ResourceResponse.Data
-
-	pin := Pin{
-		ID:          pinID,
-		Title:       strings.TrimSpace(data.Title),
-		Description: strings.TrimSpace(data.Description),
-		PinnerName:  strings.TrimSpace(data.Pinner.FullName),
-	}
-
-	pin.ImageURL = proxiedImageURL(firstNonEmpty(
-		data.Images.Orig.URL,
-		data.Images.Size736x.URL,
-		data.Images.Size564x.URL,
-		data.Images.Size474x.URL,
-		data.Images.Size236x.URL,
-	))
-
-	return pin
-}
-
-func fetchRelatedPins(ctx context.Context, pinID string, csrftoken string, bookmark string) ([]Pin, string) {
-	sourceURL := fmt.Sprintf("/pin/%s/", pinID)
-	options := map[string]any{
-		"pin_id":    pinID,
-		"page_size": 12,
-		"source":    "pin",
+		"query": query,
 	}
 	if bookmark != "" {
 		options["bookmarks"] = []string{bookmark}
 	}
 	dataParam, err := marshalPinterestOptions(options)
 	if err != nil {
-		return []Pin{}, ""
+		return nil, nil, err
 	}
 
 	method := http.MethodGet
-	queryValues := url.Values{
-		"source_url": {sourceURL},
-		"data":       {dataParam},
-	}
+	queryValues := url.Values{"data": {dataParam}}
 	var formValues url.Values
 	if bookmark != "" {
 		method = http.MethodPost
@@ -327,113 +183,16 @@ func fetchRelatedPins(ctx context.Context, pinID string, csrftoken string, bookm
 		formValues = url.Values{"data": {dataParam}}
 	}
 
-	resp, bodyBytes, err := doPinterestRequest(
+	return doPinterestRequest(
 		ctx,
 		method,
-		pinterestRelatedURL,
+		pinterestSearchURL,
 		queryValues,
 		formValues,
-		fmt.Sprintf("www/pin/%s.js", pinID),
-		sourceURL,
+		"www/search/[scope].js",
+		"",
 		csrftoken,
 	)
-	if err != nil {
-		return []Pin{}, ""
-	}
-	if resp.StatusCode != http.StatusOK {
-		return []Pin{}, ""
-	}
-
-	var responseData struct {
-		ResourceResponse struct {
-			Data []struct {
-				ID          string          `json:"id"`
-				Type        string          `json:"type"`
-				StoryType   string          `json:"story_type"`
-				TitleRaw    json.RawMessage `json:"title"`
-				GridTitle   string          `json:"grid_title"`
-				Description string          `json:"description"`
-				Images      struct {
-					Orig struct {
-						URL string `json:"url"`
-					} `json:"orig"`
-					Size474x struct {
-						URL string `json:"url"`
-					} `json:"474x"`
-					Size736x struct {
-						URL string `json:"url"`
-					} `json:"736x"`
-					Size564x struct {
-						URL string `json:"url"`
-					} `json:"564x"`
-					Size236x struct {
-						URL string `json:"url"`
-					} `json:"236x"`
-				} `json:"images"`
-				Pinner struct {
-					FullName string `json:"full_name"`
-				} `json:"pinner"`
-				AggregatedPinData struct {
-					AggregatedStats struct {
-						Saves int `json:"saves"`
-					} `json:"aggregated_stats"`
-				} `json:"aggregated_pin_data"`
-			} `json:"data"`
-			Bookmark string `json:"bookmark,omitempty"`
-		} `json:"resource_response"`
-	}
-
-	if err := json.Unmarshal(bodyBytes, &responseData); err != nil {
-		return []Pin{}, ""
-	}
-
-	var related []Pin
-	for _, result := range responseData.ResourceResponse.Data {
-		if result.Type != "pin" || result.ID == "" {
-			continue
-		}
-
-		title := ""
-		if len(result.TitleRaw) > 0 {
-			var titleObj struct {
-				Format string   `json:"format"`
-				Args   []string `json:"args"`
-			}
-			if err := json.Unmarshal(result.TitleRaw, &titleObj); err == nil && titleObj.Format != "" {
-				title = titleObj.Format
-			} else {
-				var titleStr string
-				if err := json.Unmarshal(result.TitleRaw, &titleStr); err == nil {
-					title = titleStr
-				}
-			}
-		}
-		if title == "" {
-			title = result.GridTitle
-		}
-		if title == "" {
-			title = result.Description
-		}
-
-		imageURL := proxiedImageURL(firstNonEmpty(
-			result.Images.Orig.URL,
-			result.Images.Size736x.URL,
-			result.Images.Size564x.URL,
-			result.Images.Size474x.URL,
-			result.Images.Size236x.URL,
-		))
-
-		if imageURL != "" {
-			related = append(related, Pin{
-				ID:         result.ID,
-				ImageURL:   imageURL,
-				Title:      strings.TrimSpace(title),
-				PinnerName: strings.TrimSpace(result.Pinner.FullName),
-			})
-		}
-	}
-
-	return related, responseData.ResourceResponse.Bookmark
 }
 
 func proxyImageHandler(c *gin.Context) {
@@ -499,7 +258,42 @@ func isAllowedDomain(urlStr string) bool {
 	})
 }
 
+// doPinterestRequest calls Pinterest, retrying a few times when it answers 403.
+// Pinterest intermittently rejects otherwise valid requests with 403 (code
+// 6427) and accepts the same request when it is repeated right away.
 func doPinterestRequest(
+	ctx context.Context,
+	method string,
+	endpoint string,
+	queryValues url.Values,
+	formValues url.Values,
+	handler string,
+	sourceURL string,
+	csrftoken string,
+) (*http.Response, []byte, error) {
+	var (
+		resp      *http.Response
+		bodyBytes []byte
+		err       error
+	)
+	for attempt := 0; attempt < upstreamAttempts; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, nil, ctx.Err()
+			case <-time.After(upstreamRetryDelay):
+			}
+		}
+
+		resp, bodyBytes, err = sendPinterestRequest(ctx, method, endpoint, queryValues, formValues, handler, sourceURL, csrftoken)
+		if err != nil || resp.StatusCode != http.StatusForbidden {
+			break
+		}
+	}
+	return resp, bodyBytes, err
+}
+
+func sendPinterestRequest(
 	ctx context.Context,
 	method string,
 	endpoint string,
@@ -602,7 +396,7 @@ func mustSubFS(fsys fs.FS, dir string) fs.FS {
 	return subFS
 }
 
-func renderSearchError(c *gin.Context, query string, resp *http.Response, message string, body []byte, decodeErr error) {
+func renderSearchError(c *gin.Context, query string, hideAI bool, resp *http.Response, message string, body []byte, decodeErr error) {
 	errorData := gin.H{
 		"error": message,
 	}
@@ -620,6 +414,7 @@ func renderSearchError(c *gin.Context, query string, resp *http.Response, messag
 	c.HTML(http.StatusBadGateway, "results.html", gin.H{
 		"Results": nil,
 		"Query":   query,
+		"HideAI":  hideAI,
 		"Error":   errorData,
 	})
 }

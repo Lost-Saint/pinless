@@ -46,6 +46,7 @@
                                 </svg>
                             </button>
                         </div>
+                        {{ template "hide-ai-toggle" .HideAI }}
                     </form>
                 </div>
             </header>
@@ -57,6 +58,9 @@
                             {{ if .Query }}Results for “{{ .Query }}”{{ else }}Search results{{ end }}
                         </h1>
                         <p class="section-subtitle">Open a pin to view details and related images.</p>
+                        {{ if .HiddenAI }}
+                        <p class="section-subtitle">Hid {{ .HiddenAI }} pin{{ if ne .HiddenAI 1 }}s{{ end }} that look AI-generated.</p>
+                        {{ end }}
                     </div>
                 </section>
 

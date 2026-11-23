@@ -1,0 +1,7 @@
+{{ define "hide-ai-toggle" }}
+<input type="hidden" name="noai" value="0">
+<label class="filter-toggle">
+    <input type="checkbox" name="noai" value="1" {{ if . }}checked{{ end }}>
+    <span>Hide AI art</span>
+</label>
+{{ end }}

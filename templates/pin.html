@@ -46,6 +46,7 @@
                                 </svg>
                             </button>
                         </div>
+                        {{ template "hide-ai-toggle" .HideAI }}
                     </form>
                 </div>
             </header>
@@ -64,6 +65,11 @@
                     </a>
                     {{ end }}
 
+                    {{ if .Error }}
+                    <section class="error-panel" role="alert">
+                        <h1 class="error-panel__title">{{ .Error }}</h1>
+                    </section>
+                    {{ else }}
                     <article class="panel pin-detail-card">
                         {{ if .Pin.ImageURL }}
                         <img
@@ -85,8 +91,10 @@
                             {{ end }}
                         </div>
                     </article>
+                    {{ end }}
                 </div>
 
+                {{ if not .Error }}
                 <section class="content-stack" aria-labelledby="related-title">
                     <div class="pin-meta-row">
                         <div>
@@ -115,17 +123,18 @@
                         </li>
                         {{ end }}
                     </ul>
-                    {{ if .RelatedBookmark }}
-                    <nav class="pagination" aria-label="Pagination">
-                        <a class="pagination__link" href="/pin/{{ .Pin.ID }}?q={{ .Query | urlquery }}&from={{ .From | urlquery }}&next">Next page</a>
-                    </nav>
-                    {{ end }}
                     {{ else }}
                     <section class="empty-state" aria-live="polite">
                         <p>No related pins found.</p>
                     </section>
                     {{ end }}
+                    {{ if .RelatedBookmark }}
+                    <nav class="pagination" aria-label="Pagination">
+                        <a class="pagination__link" href="/pin/{{ .Pin.ID }}?q={{ .Query | urlquery }}&from={{ .From | urlquery }}&next">Next page</a>
+                    </nav>
+                    {{ end }}
                 </section>
+                {{ end }}
             </main>
         </div>
     </div>

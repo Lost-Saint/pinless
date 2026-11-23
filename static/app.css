@@ -592,3 +592,24 @@ button {
         columns: 1;
     }
 }
+
+.filter-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-block-start: 0.6rem;
+    padding-inline-start: 0.4rem;
+    color: var(--color-text-soft);
+    font-size: 0.9rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.filter-toggle input {
+    accent-color: var(--color-accent);
+    cursor: pointer;
+}
+
+.filter-toggle:hover {
+    color: var(--color-text-muted);
+}

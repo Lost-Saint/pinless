@@ -10,7 +10,7 @@ COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
-COPY main.go ./
+COPY *.go ./
 COPY static ./static
 COPY templates ./templates
 
